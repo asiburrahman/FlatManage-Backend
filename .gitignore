@@ -1,0 +1,4 @@
+nonode_modules
+.env
+.vercel
+firbaseToken.json
