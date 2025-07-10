@@ -82,6 +82,7 @@ async function run() {
     const agreementsCollection = client.db('ManageFlat').collection('agreements')
     const usersCollection = client.db('ManageFlat').collection('users')
     const announcementCollection = client.db('ManageFlat').collection('announcement')
+    const couponCollection = client.db('ManageFlat').collection('coupon')
 
     // Flatcollection Start 
 
@@ -438,9 +439,75 @@ async function run() {
         });
       }
     });
+    // Coupons section 
+    app.get('/admin/coupons', async (req, res) => {
+      const now = new Date();
+      const coupons = await couponCollection.find().toArray();
+
+      // Update expired coupons automatically
+      for (const coupon of coupons) {
+        if (coupon.expiresAt && new Date(coupon.expiresAt) < now) {
+          await couponCollection.updateOne(
+            { _id: coupon._id },
+            { $set: { isValid: false } }
+          );
+        }
+      }
+
+      const updatedCoupons = await couponCollection.find().toArray();
+      res.send(updatedCoupons);
+    });
 
 
+    app.post('/admin/coupons', async (req, res) => {
+      const { code, discount, description, expiresAt } = req.body;
 
+      const newCoupon = {
+        code,
+        discount,
+        description,
+        createdAt: new Date(),
+        expiresAt: new Date(expiresAt),
+        isValid: true
+      };
+
+      const result = await couponCollection.insertOne(newCoupon);
+      res.send(result);
+    });
+
+    // Delete Coupon 
+    app.delete('/admin/coupons/:id', async (req, res) => {
+      const id = req.params.id;
+      try {
+        const result = await couponCollection.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to delete coupon', error });
+      }
+    });
+
+    // Update Coupon 
+    app.patch('/admin/coupons/:id', async (req, res) => {
+      const id = req.params.id;
+      const { code, discount, description, expiresAt } = req.body;
+
+      try {
+        const result = await couponCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              code,
+              discount,
+              description,
+              expiresAt: new Date(expiresAt)
+            }
+          }
+        );
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to update coupon', error });
+      }
+    });
 
 
     // FlatCollection End 
