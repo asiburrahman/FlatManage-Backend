@@ -179,13 +179,12 @@ async function run() {
     });
 
     // Announcements Api 
-    app.get('/announcements', async (req, res) => {
+    app.get('/announcement', async (req, res) => {
       try {
-        const announcements = await announcementCollection.find().toArray();
-        res.send(announcements);
-      } catch (err) {
-        console.error(' Failed to fetch announcements:', err);
-        res.status(500).send({ error: 'Failed to fetch announcements' });
+        const result = await announcementCollection.find().sort({ createdAt: -1 }).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch announcements', error });
       }
     });
 
@@ -336,7 +335,7 @@ async function run() {
         res.send({ success: true, message: 'Member removed and apartment booking cleared.' });
 
       } catch (error) {
-        console.error('❌ Error removing member:', error);
+        console.error(' Error removing member:', error);
         res.status(500).send({ success: false, error: 'Internal Server Error' });
       }
     });
@@ -397,23 +396,49 @@ async function run() {
     });
 
     // Agreement Reject 
+
     app.patch('/admin/agreements/:id/reject', async (req, res) => {
       const id = req.params.id;
+
       try {
         const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
         if (!agreement) return res.status(404).send({ message: 'Agreement not found' });
 
-        // 1. Update agreement status to 'checked' only (role remains same)
+        // Step 1: Update agreement status to 'checked'
         await agreementsCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { status: 'checked' } }
         );
 
-        res.send({ message: 'Agreement rejected' });
+        // Step 2: Update apartment's booking info to null
+        const flatUpdateResult = await flatCollection.updateOne(
+          {
+            apartmentNo: agreement.apartmentNo,
+            floor: agreement.floor,
+            block: agreement.block
+          },
+          {
+            $set: {
+              'booking.status': null,
+              'booking.bookedBy': null,
+              'booking.bookedAt': null
+            }
+          }
+        );
+
+        res.send({
+          message: 'Agreement rejected and apartment booking reset',
+          updated: flatUpdateResult.modifiedCount > 0
+        });
+
       } catch (error) {
-        res.status(500).send({ message: 'Failed to reject agreement', error });
+        res.status(500).send({
+          message: 'Failed to reject agreement and reset flat booking',
+          error: error.message
+        });
       }
     });
+
 
 
 
