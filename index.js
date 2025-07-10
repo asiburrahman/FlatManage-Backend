@@ -172,7 +172,7 @@ async function run() {
         // 1. Get total rooms
         const totalRooms = await flatCollection.estimatedDocumentCount();
         console.log(totalRooms);
-        
+
         // 2. Get agreements where status is 'checked'
         const agreedRooms = await agreementsCollection.countDocuments({ status: 'checked' });
 
@@ -190,7 +190,7 @@ async function run() {
         ]).toArray();
 
         console.log(userRoles);
-        
+
 
         const roleCounts = {
           user: 0,
@@ -222,6 +222,39 @@ async function run() {
       }
     });
 
+    // Manage Member 
+    app.get('/admin/members', async (req, res) => {
+      try {
+        // Step 1: Get all members
+        const members = await usersCollection.find({ role: 'member' }).toArray();
+
+        // Step 2: For each member, get their agreement if it’s accepted (checked)
+        const results = await Promise.all(
+          members.map(async (member) => {
+            const agreement = await agreementsCollection.findOne({
+              userEmail: member.email,
+              status: 'checked',
+            });
+
+            // Format booking info or use 'None'
+            const bookingName = agreement
+              ? `Floor ${agreement.floor}, Block ${agreement.block}, Room ${agreement.apartmentNo}`
+              : 'None';
+
+            return {
+              name: member.name,
+              email: member.email,
+              bookingName,
+            };
+          })
+        );
+
+        res.send(results);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to fetch members' });
+      }
+    });
 
 
     // FlatCollection End 
