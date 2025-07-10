@@ -81,6 +81,7 @@ async function run() {
     const flatCollection = client.db('ManageFlat').collection('apartment')
     const agreementsCollection = client.db('ManageFlat').collection('agreements')
     const usersCollection = client.db('ManageFlat').collection('users')
+    const announcementCollection = client.db('ManageFlat').collection('announcement')
 
     // Flatcollection Start 
 
@@ -160,10 +161,67 @@ async function run() {
         const announcements = await announcementCollection.find().toArray();
         res.send(announcements);
       } catch (err) {
-        console.error('❌ Failed to fetch announcements:', err);
+        console.error(' Failed to fetch announcements:', err);
         res.status(500).send({ error: 'Failed to fetch announcements' });
       }
     });
+    // Admin profile Data 
+    // routes/adminRoutes.js
+    app.get('/admin/summary', async (req, res) => {
+      try {
+        // 1. Get total rooms
+        const totalRooms = await flatCollection.estimatedDocumentCount();
+        console.log(totalRooms);
+        
+        // 2. Get agreements where status is 'checked'
+        const agreedRooms = await agreementsCollection.countDocuments({ status: 'checked' });
+
+        // 3. Available rooms = total - booked
+        const availableRooms = totalRooms - agreedRooms;
+
+        // 4. Get user role counts
+        const userRoles = await usersCollection.aggregate([
+          {
+            $group: {
+              _id: "$role",
+              count: { $sum: 1 }
+            }
+          }
+        ]).toArray();
+
+        console.log(userRoles);
+        
+
+        const roleCounts = {
+          user: 0,
+          member: 0,
+          admin: 0
+        };
+
+        userRoles.forEach(r => {
+          roleCounts[r._id] = r.count;
+        });
+
+        const availabilityPercent = ((availableRooms / totalRooms) * 100).toFixed(2);
+        const agreementPercent = ((agreedRooms / totalRooms) * 100).toFixed(2);
+
+        res.send({
+          totalRooms,
+          availableRooms,
+          agreedRooms,
+          availabilityPercent,
+          agreementPercent,
+          users: roleCounts.user || 0,
+          members: roleCounts.member || 0,
+          admin: roleCounts.admin || 0,
+        });
+
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to fetch admin profile summary' });
+      }
+    });
+
 
 
     // FlatCollection End 
