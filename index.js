@@ -193,6 +193,18 @@ async function run() {
 
 
     // Admin profile Data 
+    // Create announcements by admin 
+    app.post('/admin/announcement', async (req, res) => {
+      try {
+        const announcement = req.body;
+        announcement.createdAt = new Date(); // Add timestamp
+        const result = await announcementCollection.insertOne(announcement);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to create announcement', error });
+      }
+    });
+
     // routes/adminRoutes.js
     app.get('/admin/summary', async (req, res) => {
       try {
