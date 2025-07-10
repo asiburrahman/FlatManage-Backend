@@ -258,13 +258,39 @@ async function run() {
 
     // Fetch agreement Collection 
     app.get('/admin/agreements', async (req, res) => {
-  try {
-    const pendingAgreements = await agreementsCollection.find({ status: 'pending' }).toArray();
-    res.send(pendingAgreements);
-  } catch (error) {
-    res.status(500).send({ message: 'Failed to fetch agreements', error });
-  }
-});
+      try {
+        const pendingAgreements = await agreementsCollection.find({ status: 'pending' }).toArray();
+        res.send(pendingAgreements);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch agreements', error });
+      }
+    });
+
+    // Agreement accept 
+    app.patch('/admin/agreements/:id/accept', async (req, res) => {
+      const id = req.params.id;
+      try {
+        const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
+        if (!agreement) return res.status(404).send({ message: 'Agreement not found' });
+
+        // 1. Update agreement status to 'checked'
+        await agreementsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: 'checked' } }
+        );
+
+        // 2. Update user role to 'member'
+        await usersCollection.updateOne(
+          { email: agreement.userEmail },
+          { $set: { role: 'member' } }
+        );
+
+        res.send({ message: 'Agreement accepted and user promoted to member' });
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to accept agreement', error });
+      }
+    });
+
 
 
     // FlatCollection End 
