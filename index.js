@@ -85,36 +85,36 @@ async function run() {
     // Flatcollection Start 
 
     app.get('/apartments', async (req, res) => {
-  try {
-    const apartments = await flatCollection.find().toArray();
-    res.send(apartments);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ error: 'Failed to fetch apartments' });
-  }
-});
+      try {
+        const apartments = await flatCollection.find().toArray();
+        res.send(apartments);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: 'Failed to fetch apartments' });
+      }
+    });
 
-app.post('/apartments', async (req, res) => {
-  const { userEmail, apartmentNo } = req.body;
+    app.post('/apartments', async (req, res) => {
+      const { userEmail, apartmentNo } = req.body;
 
-  // Check if the user already has an agreement
-  const existing = await agreementsCollection.findOne({ userEmail });
+      // Check if the user already has an agreement
+      const existing = await agreementsCollection.findOne({ userEmail });
 
-  if (existing) {
-    return res.status(400).json({ message: 'You already have an agreement.' });
-  }
+      if (existing) {
+        return res.status(400).json({ message: 'You already have an agreement.' });
+      }
 
-  // Save new agreement
-  const result = await agreementsCollection.insertOne({
-    ...req.body,
-    status: 'pending',
-    agreementDate: new Date()
-  });
+      // Save new agreement
+      const result = await agreementsCollection.insertOne({
+        ...req.body,
+        status: 'pending',
+        agreementDate: new Date()
+      });
 
-  res.status(201).json(result);
-});
+      res.status(201).json(result);
+    });
 
- app.post('/user', async (req, res) => {
+    app.post('/user', async (req, res) => {
       const userData = req.body
       userData.role = 'user'
       userData.created_at = new Date().toISOString()
@@ -138,14 +138,21 @@ app.post('/apartments', async (req, res) => {
       res.send(result)
     })
 
-      app.get('/user/role/:email', async (req, res) => {
+    app.get('/user/role/:email', async (req, res) => {
       const email = req.params.email
       console.log(email);
-      
+
       const result = await usersCollection.findOne({ email })
       if (!result) return res.status(404).send({ message: 'User Not Found.' })
       res.send({ role: result?.role })
     })
+    // User profile 
+    app.get('/agreements/user/:email', async (req, res) => {
+      const email = req.params.email;
+      const result = await agreementsCollection.findOne({ userEmail: email });
+
+      res.send(result || {});
+    });
 
 
     // FlatCollection End 
