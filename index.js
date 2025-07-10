@@ -96,23 +96,47 @@ async function run() {
     });
 
     app.post('/apartments', async (req, res) => {
-      const { userEmail, apartmentNo } = req.body;
+      const { userEmail, apartmentNo, floor, block } = req.body;
 
-      // Check if the user already has an agreement
+      // 1. Check if the user already has an agreement
       const existing = await agreementsCollection.findOne({ userEmail });
-
       if (existing) {
         return res.status(400).json({ message: 'You already have an agreement.' });
       }
 
-      // Save new agreement
+      // 2. Check if the apartment is already booked
+      const apartment = await flatCollection.findOne({
+        apartmentNo,
+        floor,
+        block,
+        'booking.status': 'checked'
+      });
+
+      if (apartment) {
+        return res.status(400).json({ message: 'This apartment is already booked.' });
+      }
+
+      // 3. Save agreement
       const result = await agreementsCollection.insertOne({
         ...req.body,
         status: 'pending',
       });
 
+      // 4. Optionally update apartment to mark status as 'pending'
+      await flatCollection.updateOne(
+        { apartmentNo, floor, block },
+        {
+          $set: {
+            'booking.status': 'pending',
+            'booking.bookedBy': userEmail,
+            'booking.bookedAt': new Date()
+          }
+        }
+      );
+
       res.status(201).json(result);
     });
+
 
     app.post('/user', async (req, res) => {
       const userData = req.body
@@ -164,6 +188,10 @@ async function run() {
         res.status(500).send({ error: 'Failed to fetch announcements' });
       }
     });
+
+
+
+
     // Admin profile Data 
     // routes/adminRoutes.js
     app.get('/admin/summary', async (req, res) => {
@@ -226,8 +254,8 @@ async function run() {
       try {
         // Step 1: Get all members
         const members = await usersCollection.find({ role: 'member' }).toArray();
-          console.log(members);
-          
+        console.log(members);
+
         // Step 2: For each member, get their agreement if it’s accepted (checked)
         const results = await Promise.all(
           members.map(async (member) => {
@@ -255,6 +283,52 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch members' });
       }
     });
+    // remove member from userCollection 
+    app.patch('/admin/remove-member/:email', async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        // 1. Change role to 'user'
+        const roleUpdate = await usersCollection.updateOne(
+          { email },
+          { $set: { role: 'user' } }
+        );
+
+        // 2. Find user's active (checked) agreement
+        const agreement = await agreementsCollection.findOne({
+          userEmail: email,
+          status: 'checked'
+        });
+
+        if (agreement) {
+          // 3. Reset apartment booking info
+          await flatCollection.updateOne(
+            {
+              apartmentNo: agreement.apartmentNo,
+              block: agreement.block,
+              floor: agreement.floor
+            },
+            {
+              $set: {
+                'booking.status': null,
+                'booking.bookedBy': null,
+                'booking.bookedAt': null
+              }
+            }
+          );
+
+          // 4. (Optional) Delete or cancel the agreement
+          await agreementsCollection.deleteOne({ _id: agreement._id }); // or use update to set status: 'cancelled'
+        }
+
+        res.send({ success: true, message: 'Member removed and apartment booking cleared.' });
+
+      } catch (error) {
+        console.error('❌ Error removing member:', error);
+        res.status(500).send({ success: false, error: 'Internal Server Error' });
+      }
+    });
+
 
     // Fetch agreement Collection 
     app.get('/admin/agreements', async (req, res) => {
@@ -285,31 +359,49 @@ async function run() {
           { $set: { role: 'member' } }
         );
 
-        res.send({ message: 'Agreement accepted and user promoted to member' });
+        // ✅ 3. Mark apartment as booked
+        const updateApartment = await flatCollection.updateOne(
+          {
+            floor: agreement.floor,
+            block: agreement.block,
+            apartmentNo: agreement.apartmentNo
+          },
+          {
+            $set: {
+              'booking.status': 'checked',
+              'booking.bookedBy': agreement.userEmail,
+              'booking.bookedAt': new Date()
+            }
+          }
+        );
+
+        res.send({
+          message: 'Agreement accepted, user promoted to member, apartment marked as booked',
+          apartmentUpdated: updateApartment.modifiedCount > 0
+        });
       } catch (error) {
         res.status(500).send({ message: 'Failed to accept agreement', error });
       }
     });
 
-
     // Agreement Reject 
-  app.patch('/admin/agreements/:id/reject', async (req, res) => {
-  const id = req.params.id;
-  try {
-    const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
-    if (!agreement) return res.status(404).send({ message: 'Agreement not found' });
+    app.patch('/admin/agreements/:id/reject', async (req, res) => {
+      const id = req.params.id;
+      try {
+        const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
+        if (!agreement) return res.status(404).send({ message: 'Agreement not found' });
 
-    // 1. Update agreement status to 'checked' only (role remains same)
-    await agreementsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: 'checked' } }
-    );
+        // 1. Update agreement status to 'checked' only (role remains same)
+        await agreementsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: 'checked' } }
+        );
 
-    res.send({ message: 'Agreement rejected' });
-  } catch (error) {
-    res.status(500).send({ message: 'Failed to reject agreement', error });
-  }
-});
+        res.send({ message: 'Agreement rejected' });
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to reject agreement', error });
+      }
+    });
 
 
 
