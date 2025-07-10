@@ -109,7 +109,6 @@ async function run() {
       const result = await agreementsCollection.insertOne({
         ...req.body,
         status: 'pending',
-        agreementDate: new Date()
       });
 
       res.status(201).json(result);
@@ -141,7 +140,7 @@ async function run() {
 
     app.get('/user/role/:email', async (req, res) => {
       const email = req.params.email
-      console.log(email);
+      // console.log(email);
 
       const result = await usersCollection.findOne({ email })
       if (!result) return res.status(404).send({ message: 'User Not Found.' })
@@ -189,7 +188,7 @@ async function run() {
           }
         ]).toArray();
 
-        console.log(userRoles);
+        // console.log(userRoles);
 
 
         const roleCounts = {
@@ -227,7 +226,8 @@ async function run() {
       try {
         // Step 1: Get all members
         const members = await usersCollection.find({ role: 'member' }).toArray();
-
+          console.log(members);
+          
         // Step 2: For each member, get their agreement if it’s accepted (checked)
         const results = await Promise.all(
           members.map(async (member) => {
@@ -290,6 +290,27 @@ async function run() {
         res.status(500).send({ message: 'Failed to accept agreement', error });
       }
     });
+
+
+    // Agreement Reject 
+  app.patch('/admin/agreements/:id/reject', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
+    if (!agreement) return res.status(404).send({ message: 'Agreement not found' });
+
+    // 1. Update agreement status to 'checked' only (role remains same)
+    await agreementsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: 'checked' } }
+    );
+
+    res.send({ message: 'Agreement rejected' });
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to reject agreement', error });
+  }
+});
+
 
 
 
