@@ -256,6 +256,16 @@ async function run() {
       }
     });
 
+    // Fetch agreement Collection 
+    app.get('/admin/agreements', async (req, res) => {
+  try {
+    const pendingAgreements = await agreementsCollection.find({ status: 'pending' }).toArray();
+    res.send(pendingAgreements);
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to fetch agreements', error });
+  }
+});
+
 
     // FlatCollection End 
 
