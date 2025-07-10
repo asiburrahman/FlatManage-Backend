@@ -154,6 +154,17 @@ async function run() {
       res.send(result || {});
     });
 
+    // Announcements Api 
+    app.get('/announcements', async (req, res) => {
+      try {
+        const announcements = await announcementCollection.find().toArray();
+        res.send(announcements);
+      } catch (err) {
+        console.error('❌ Failed to fetch announcements:', err);
+        res.status(500).send({ error: 'Failed to fetch announcements' });
+      }
+    });
+
 
     // FlatCollection End 
 
