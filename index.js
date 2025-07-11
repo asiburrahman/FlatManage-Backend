@@ -77,13 +77,12 @@ const verifyTokenEmail = (req, res, next) => {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-
-    const foodCollection = client.db('foodShare').collection('food')
     const flatCollection = client.db('ManageFlat').collection('apartment')
     const agreementsCollection = client.db('ManageFlat').collection('agreements')
     const usersCollection = client.db('ManageFlat').collection('users')
     const announcementCollection = client.db('ManageFlat').collection('announcement')
     const couponCollection = client.db('ManageFlat').collection('coupon')
+    const paymentCollection = client.db('ManageFlat').collection('payment')
 
     // Flatcollection Start 
 
@@ -149,16 +148,16 @@ async function run() {
         email: userData?.email,
       }
       const alreadyExists = await usersCollection.findOne(query)
-      console.log('User already exists: ', !!alreadyExists)
+
       if (!!alreadyExists) {
-        console.log('Updating user data......')
+
         const result = await usersCollection.updateOne(query, {
           $set: { last_loggedIn: new Date().toISOString() },
         })
         return res.send(result)
       }
 
-      console.log('Creating user data......')
+
       // return console.log(userData)
       const result = await usersCollection.insertOne(userData)
       res.send(result)
@@ -211,7 +210,7 @@ async function run() {
       try {
         // 1. Get total rooms
         const totalRooms = await flatCollection.estimatedDocumentCount();
-        console.log(totalRooms);
+
 
         // 2. Get agreements where status is 'checked'
         const agreedRooms = await agreementsCollection.countDocuments({ status: 'checked' });
@@ -574,14 +573,14 @@ async function run() {
           agreement.floor === floor &&
           agreement.block === block &&
           expectedRent === rent;
-
+          const expectedRentUSD = Math.floor(expectedRent/140)
         if (!isValid) {
           return res.status(400).json({ message: 'Payment info mismatch or incorrect discount' });
         }
 
         // Step 4: Create Stripe payment intent
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: expectedRent / 140,
+          amount: expectedRentUSD * 100,
           currency: 'usd',
           payment_method_types: ['card'],
           metadata: {
@@ -599,6 +598,40 @@ async function run() {
       } catch (err) {
         console.error('Payment intent creation failed:', err);
         res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+    // Import ObjectId if needed for reference (optional)
+    // const { ObjectId } = require('mongodb');
+
+    app.post('/member/payment/success', async (req, res) => {
+      const payment = req.body;
+
+      if (
+        !payment ||
+        !payment.email ||
+        !payment.transactionId ||
+        !payment.floor ||
+        !payment.block ||
+        !payment.apartmentNo ||
+        !payment.month ||
+        !payment.rent
+      ) {
+        return res.status(400).json({ message: 'Missing required payment fields' });
+      }
+
+      try {
+        payment.paidAt = new Date();
+
+        const result = await paymentCollection.insertOne(payment);
+
+        if (result.insertedId) {
+          return res.status(200).json({ message: 'Payment stored successfully', insertedId: result.insertedId });
+        } else {
+          return res.status(500).json({ message: 'Failed to store payment' });
+        }
+      } catch (error) {
+        console.error('Payment saving failed:', error);
+        return res.status(500).json({ message: 'Server error', error });
       }
     });
 
