@@ -513,34 +513,94 @@ async function run() {
     // Member Payment and Coupon Api 
 
     app.get('/coupons/:code', async (req, res) => {
-  const code = req.params.code;
-  const now = new Date();
+      const code = req.params.code;
+      const now = new Date();
 
-  try {
-    const coupon = await couponCollection.findOne({ code });
+      try {
+        const coupon = await couponCollection.findOne({ code });
 
-    if (!coupon || !coupon.isValid || new Date(coupon.expiresAt) < now) {
-      return res.send({
-        isValid: false,
-        discountPercentage: 0,
-        message: 'Coupon expired or invalid'
-      });
-    }
+        if (!coupon || !coupon.isValid || new Date(coupon.expiresAt) < now) {
+          return res.send({
+            isValid: false,
+            discountPercentage: 0,
+            message: 'Coupon expired or invalid'
+          });
+        }
 
-    res.send({
-      isValid: true,
-      discountPercentage: coupon.discount,
-      message: 'Coupon valid'
+        res.send({
+          isValid: true,
+          discountPercentage: coupon.discount,
+          message: 'Coupon valid'
+        });
+
+      } catch (error) {
+        res.status(500).send({
+          isValid: false,
+          discountPercentage: 0,
+          message: 'Server error'
+        });
+      }
     });
 
-  } catch (error) {
-    res.status(500).send({
-      isValid: false,
-      discountPercentage: 0,
-      message: 'Server error'
+    // payment on stripe 
+    app.post('/create-payment-secret', async (req, res) => {
+      const { paymentInfo } = req.body;
+
+      const { email, rent, apartmentNo, floor, block, discount = 0 } = paymentInfo;
+
+      if (!email || !apartmentNo || !floor || !block || !rent) {
+        return res.status(400).json({ message: 'Missing payment details' });
+      }
+
+      try {
+        // Step 1: Get agreement from DB
+        const agreement = await agreementsCollection.findOne({
+          userEmail: email,
+          status: 'checked'
+        });
+
+        if (!agreement) {
+          return res.status(404).json({ message: 'No valid agreement found' });
+        }
+
+        // Step 2: Calculate expected discounted rent
+        const expectedRent = Math.round(
+          agreement.rent - (agreement.rent * (discount || 0)) / 100
+        );
+
+        // Step 3: Match rent + apartment info
+        const isValid =
+          agreement.apartmentNo === apartmentNo &&
+          agreement.floor === floor &&
+          agreement.block === block &&
+          expectedRent === rent;
+
+        if (!isValid) {
+          return res.status(400).json({ message: 'Payment info mismatch or incorrect discount' });
+        }
+
+        // Step 4: Create Stripe payment intent
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: expectedRent / 140,
+          currency: 'usd',
+          payment_method_types: ['card'],
+          metadata: {
+            email,
+            apartment: apartmentNo,
+            floor,
+            block,
+            discount: discount.toString(),
+            originalRent: agreement.rent.toString()
+          },
+        });
+
+        res.send({ clientSecret: paymentIntent.client_secret });
+
+      } catch (err) {
+        console.error('Payment intent creation failed:', err);
+        res.status(500).json({ message: 'Internal server error' });
+      }
     });
-  }
-});
 
 
 
