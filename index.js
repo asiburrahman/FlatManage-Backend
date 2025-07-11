@@ -1,11 +1,12 @@
+require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
 const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
-require('dotenv').config()
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(decoded);
+const stripe = require('stripe')(process.env.STRIPE_API_KEY)
 
 // var serviceAccount = require("./firbaseToken.json");
 
@@ -510,6 +511,37 @@ async function run() {
     });
 
     // Member Payment and Coupon Api 
+
+    app.get('/coupons/:code', async (req, res) => {
+  const code = req.params.code;
+  const now = new Date();
+
+  try {
+    const coupon = await couponCollection.findOne({ code });
+
+    if (!coupon || !coupon.isValid || new Date(coupon.expiresAt) < now) {
+      return res.send({
+        isValid: false,
+        discountPercentage: 0,
+        message: 'Coupon expired or invalid'
+      });
+    }
+
+    res.send({
+      isValid: true,
+      discountPercentage: coupon.discount,
+      message: 'Coupon valid'
+    });
+
+  } catch (error) {
+    res.status(500).send({
+      isValid: false,
+      discountPercentage: 0,
+      message: 'Server error'
+    });
+  }
+});
+
 
 
     // FlatCollection End 
