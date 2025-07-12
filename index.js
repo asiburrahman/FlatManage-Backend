@@ -84,6 +84,51 @@ async function run() {
     const couponCollection = client.db('ManageFlat').collection('coupon')
     const paymentCollection = client.db('ManageFlat').collection('payment')
 
+
+    const verifyTokenEmail = (req, res, next) => {
+
+
+
+  if (req.params.email !== req.decoded.email) {
+    return res.status(403).send({ message: "Forbidden Access" })
+  }
+  next();
+}
+
+
+    // Verify Admin 
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req?.decoded?.email
+      console.log(email);
+      
+      const user = await usersCollection.findOne({
+        email,
+      })
+      console.log(user?.role)
+      if (!user || user?.role !== 'admin')
+        return res
+          .status(403)
+          .send({ message: 'Admin only Actions!', role: user?.role })
+
+      next()
+    }
+
+    // Verify Member 
+     const verifyMember = async (req, res, next) => {
+      const email = req?.decoded?.email
+      const user = await usersCollection.findOne({
+        email,
+      })
+      console.log(user?.role)
+      if (!user || user?.role !== 'member')
+        return res
+          .status(403)
+          .send({ message: 'Member only Actions!', role: user?.role })
+
+      next()
+    }
+
     // Flatcollection Start 
 
     app.get('/apartments', async (req, res) => {
@@ -163,7 +208,7 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/user/role/:email', async (req, res) => {
+    app.get('/user/role/:email',verifyAccessToken, verifyTokenEmail, async (req, res) => {
       const email = req.params.email
       // console.log(email);
 
@@ -172,7 +217,7 @@ async function run() {
       res.send({ role: result?.role })
     })
     // User profile 
-    app.get('/agreements/user/:email', async (req, res) => {
+    app.get('/agreements/user/:email', verifyAccessToken, verifyTokenEmail,  async (req, res) => {
       const email = req.params.email;
       const result = await agreementsCollection.findOne({ userEmail: email });
 
@@ -180,7 +225,7 @@ async function run() {
     });
 
     // Announcements Api 
-    app.get('/announcement', async (req, res) => {
+    app.get('/announcement', verifyAccessToken, async (req, res) => {
       try {
         const result = await announcementCollection.find().sort({ createdAt: -1 }).toArray();
         res.send(result);
@@ -194,7 +239,7 @@ async function run() {
 
     // Admin profile Data 
     // Create announcements by admin 
-    app.post('/admin/announcement', async (req, res) => {
+    app.post('/admin/announcement', verifyAccessToken, verifyAdmin,  async (req, res) => {
       try {
         const announcement = req.body;
         announcement.createdAt = new Date(); // Add timestamp
@@ -206,7 +251,7 @@ async function run() {
     });
 
     // routes/adminRoutes.js
-    app.get('/admin/summary', async (req, res) => {
+    app.get('/admin/summary', verifyAccessToken, verifyAdmin,  async (req, res) => {
       try {
         // 1. Get total rooms
         const totalRooms = await flatCollection.estimatedDocumentCount();
@@ -262,7 +307,7 @@ async function run() {
     });
 
     // Manage Member 
-    app.get('/admin/members', async (req, res) => {
+    app.get('/admin/members', verifyAccessToken, verifyAdmin,  async (req, res) => {
       try {
         // Step 1: Get all members
         const members = await usersCollection.find({ role: 'member' }).toArray();
@@ -296,7 +341,7 @@ async function run() {
       }
     });
     // remove member from userCollection 
-    app.patch('/admin/remove-member/:email', async (req, res) => {
+    app.patch('/admin/remove-member/:email', verifyAccessToken, verifyAdmin, async (req, res) => {
       const email = req.params.email;
 
       try {
@@ -343,7 +388,7 @@ async function run() {
 
 
     // Fetch agreement Collection 
-    app.get('/admin/agreements', async (req, res) => {
+    app.get('/admin/agreements', verifyAccessToken, verifyAdmin, async (req, res) => {
       try {
         const pendingAgreements = await agreementsCollection.find({ status: 'pending' }).toArray();
         res.send(pendingAgreements);
@@ -353,7 +398,7 @@ async function run() {
     });
 
     // Agreement accept 
-    app.patch('/admin/agreements/:id/accept', async (req, res) => {
+    app.patch('/admin/agreements/:id/accept', verifyAccessToken, verifyAdmin,  async (req, res) => {
       const id = req.params.id;
       try {
         const agreement = await agreementsCollection.findOne({ _id: new ObjectId(id) });
@@ -398,7 +443,7 @@ async function run() {
 
     // Agreement Reject 
 
-    app.patch('/admin/agreements/:id/reject', async (req, res) => {
+    app.patch('/admin/agreements/:id/reject', verifyAccessToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
 
       try {
@@ -440,7 +485,7 @@ async function run() {
       }
     });
     // Coupons section 
-    app.get('/admin/coupons', async (req, res) => {
+    app.get('/admin/coupons',   async (req, res) => {
       const now = new Date();
       const coupons = await couponCollection.find().toArray();
 
@@ -459,7 +504,7 @@ async function run() {
     });
 
 
-    app.post('/admin/coupons', async (req, res) => {
+    app.post('/admin/coupons', verifyAccessToken, verifyAdmin, async (req, res) => {
       const { code, discount, description, expiresAt } = req.body;
 
       const newCoupon = {
@@ -476,7 +521,7 @@ async function run() {
     });
 
     // Delete Coupon 
-    app.delete('/admin/coupons/:id', async (req, res) => {
+    app.delete('/admin/coupons/:id', verifyAccessToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       try {
         const result = await couponCollection.deleteOne({ _id: new ObjectId(id) });
@@ -487,7 +532,7 @@ async function run() {
     });
 
     // Update Coupon 
-    app.patch('/admin/coupons/:id', async (req, res) => {
+    app.patch('/admin/coupons/:id', verifyAccessToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { code, discount, description, expiresAt } = req.body;
 
@@ -511,7 +556,7 @@ async function run() {
 
     // Member Payment and Coupon Api 
 
-    app.get('/coupons/:code', async (req, res) => {
+    app.get('/coupons/:code', verifyAccessToken, async (req, res) => {
       const code = req.params.code;
       const now = new Date();
 
@@ -542,7 +587,7 @@ async function run() {
     });
 
     // payment on stripe 
-    app.post('/create-payment-secret', async (req, res) => {
+    app.post('/create-payment-secret', verifyAccessToken, async (req, res) => {
       const { paymentInfo } = req.body;
 
       const { email, rent, apartmentNo, floor, block, discount = 0 } = paymentInfo;
@@ -573,7 +618,7 @@ async function run() {
           agreement.floor === floor &&
           agreement.block === block &&
           expectedRent === rent;
-          const expectedRentUSD = Math.floor(expectedRent/140)
+        const expectedRentUSD = Math.floor(expectedRent / 140)
         if (!isValid) {
           return res.status(400).json({ message: 'Payment info mismatch or incorrect discount' });
         }
@@ -603,7 +648,7 @@ async function run() {
     // Import ObjectId if needed for reference (optional)
     // const { ObjectId } = require('mongodb');
 
-    app.post('/member/payment/success', async (req, res) => {
+    app.post('/member/payment/success', verifyAccessToken, verifyMember, async (req, res) => {
       const payment = req.body;
 
       if (
@@ -635,7 +680,12 @@ async function run() {
       }
     });
 
-
+    // Get Payment history 
+    app.get('/payments/user/:email', verifyAccessToken, verifyMember, verifyTokenEmail, async (req, res) => {
+      const email = req.params.email;
+      const result = await paymentCollection.find({ email }).sort({ paidAt: -1 }).toArray();
+      res.send(result);
+    });
 
     // FlatCollection End 
 
