@@ -13,21 +13,6 @@ const apartmentRoutes = (flatCollection, agreementsCollection) => {
     }
   });
 
-  router.get('/:id', async (req, res) => {
-    try {
-      const { ObjectId } = require('mongodb');
-      const id = req.params.id;
-      const apartment = await flatCollection.findOne({ _id: new ObjectId(id) });
-      if (!apartment) {
-        return res.status(404).send({ error: 'Apartment not found' });
-      }
-      res.send(apartment);
-    } catch (err) {
-      console.error(err);
-      res.status(500).send({ error: 'Invalid ID or failed to fetch apartment' });
-    }
-  });
-
   router.post('/', async (req, res) => {
     const { userEmail, apartmentNo, floor, block } = req.body;
 
